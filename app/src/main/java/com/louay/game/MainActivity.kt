@@ -3,7 +3,6 @@ package com.louay.game
 import android.app.Activity
 import android.content.Context
 import android.graphics.*
-import android.graphics.drawable.*
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -13,9 +12,9 @@ import android.os.Vibrator
 import android.view.MotionEvent
 import android.view.View
 import android.view.Window
+import android.view.WindowManager
 import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -39,6 +38,7 @@ class MainActivity : Activity() {
 private class ZeroView(private val ctx: Context) : View(ctx) {
     private enum class Screen { MENU, STORY, HOWTO, PLAY, RESULT }
     private data class Node(var x: Float, var y: Float, var r: Float)
+    private data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
 
     private val prefs = ctx.getSharedPreferences("zero_save", Context.MODE_PRIVATE)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -60,11 +60,8 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
     private var ghostNodes = mutableListOf<Node>()
     private var ghostProgress = 0f
     private var roundStarted = 0L
-    private var resultReason = ""
     private var pulse = 0f
     private var particles = mutableListOf<Particle>()
-
-    private data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
 
     init {
         isFocusable = true
@@ -90,7 +87,6 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
             Screen.PLAY -> drawGame(c, w, h)
             Screen.RESULT -> drawResult(c, w, h)
         }
-
         postInvalidateDelayed(if (screen == Screen.PLAY) 16L else 60L)
     }
 
@@ -103,13 +99,11 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
         paint.color = Color.argb(35, 125, 249, 255)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1f
-        val grid = 54f
         var x = 0f
-        while (x < w) { c.drawLine(x, 0f, x, h, paint); x += grid }
+        while (x < w) { c.drawLine(x, 0f, x, h, paint); x += 54f }
         var y = 0f
-        while (y < h) { c.drawLine(0f, y, w, y, paint); y += grid }
+        while (y < h) { c.drawLine(0f, y, w, y, paint); y += 54f }
         paint.style = Paint.Style.FILL
-
         paint.color = Color.argb(16, 125, 249, 255)
         c.drawCircle(w * .82f, h * .18f, 190f, paint)
         c.drawCircle(w * .12f, h * .82f, 150f, paint)
@@ -122,42 +116,25 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
 
         button(c, w / 2f, h * .47f, w * .78f, 64f, t("ابدأ الرحلة", "START THE ECHO"), true)
         button(c, w / 2f, h * .47f + 82f, w * .78f, 56f, t("كيف تلعب؟", "HOW TO PLAY"), false)
-        button(c, w / 2f, h * .47f + 154f, w * .78f, 56f, t("العربية / English", "العربية / English"), false)
+        button(c, w / 2f, h * .47f + 154f, w * .78f, 56f, "العربية / English", false)
 
-        val best = t("أفضل نتيجة: $bestScore", "BEST SCORE: $bestScore")
-        centerText(c, best, w / 2f, h - 78f, 15f, Color.rgb(185, 195, 214), false)
+        centerText(c, t("أفضل نتيجة: $bestScore", "BEST SCORE: $bestScore"), w / 2f, h - 78f, 15f, Color.rgb(185, 195, 214), false)
         centerText(c, "v1.0.0  •  OFFLINE  •  ZERO LABS", w / 2f, h - 42f, 10f, Color.rgb(100, 112, 132), false)
     }
 
     private fun drawStory(c: Canvas, w: Float, h: Float) {
         header(c, t("الرسالة الأولى", "FIRST TRANSMISSION"))
         centerText(c, "01", w / 2f, 168f, 74f, Color.rgb(125,249,255), true)
-        wrapText(c,
-            t("كل حركة تقوم بها تُحفظ. كل قرار يترك أثراً. وعندما تنتهي المرحلة، سيعود أثرُك ليلعب ضدك.",
-              "Every move is recorded. Every decision leaves an echo. When a stage ends, your past returns to play against you."),
-            w / 2f, 264f, w * .78f, 19f, Color.WHITE)
-        wrapText(c,
-            t("لا توجد أرواح إضافية. لا توجد صدفة. فقط أنت... والنسخة التي صنعتها بيديك.",
-              "No extra lives. No luck. Only you... and the version of you that you created."),
-            w / 2f, 360f, w * .78f, 18f, Color.LTGRAY)
+        wrapText(c, t("كل حركة تقوم بها تُحفظ. كل قرار يترك أثراً. وعندما تنتهي المرحلة، سيعود أثرُك ليلعب ضدك.", "Every move is recorded. Every decision leaves an echo. When a stage ends, your past returns to play against you."), w / 2f, 264f, w * .78f, 19f, Color.WHITE)
+        wrapText(c, t("لا توجد أرواح إضافية. لا توجد صدفة. فقط أنت... والنسخة التي صنعتها بيديك.", "No extra lives. No luck. Only you... and the version of you that you created."), w / 2f, 360f, w * .78f, 18f, Color.LTGRAY)
         button(c, w / 2f, h - 116f, w * .78f, 62f, t("أدخل المتاهة", "ENTER THE MAZE"), true)
         button(c, w / 2f, h - 44f, w * .78f, 48f, t("رجوع", "BACK"), false)
     }
 
     private fun drawHowTo(c: Canvas, w: Float, h: Float) {
         header(c, t("طريقة اللعب", "HOW ZERO WORKS"))
-        val titles = arrayOf(
-            t("١ • احفظ المسار", "1 • READ THE SIGNAL"),
-            t("٢ • اضغط العقد بالترتيب", "2 • HIT NODES IN ORDER"),
-            t("٣ • راقب شبحك السابق", "3 • WATCH YOUR ECHO"),
-            t("٤ • لا تثق بذاكرتك", "4 • DON'T TRUST MEMORY")
-        )
-        val bodies = arrayOf(
-            t("الدوائر المضيئة هي مفاتيح المرحلة.", "The glowing nodes are the stage keys."),
-            t("كل لمسة صحيحة تقرّبك من الصفر.", "Every correct tap pushes you closer to ZERO."),
-            t("المسار السابق يعود كطيف ويتحرك فوق الخريطة.", "Your last route returns as a moving ghost."),
-            t("كل مرحلة تصبح أسرع وأصعب وتغيّر شكل المتاهة.", "Every stage gets faster, harder and less predictable.")
-        )
+        val titles = arrayOf(t("١ • احفظ المسار", "1 • READ THE SIGNAL"), t("٢ • اضغط العقد بالترتيب", "2 • HIT NODES IN ORDER"), t("٣ • راقب شبحك السابق", "3 • WATCH YOUR ECHO"), t("٤ • لا تثق بذاكرتك", "4 • DON'T TRUST MEMORY"))
+        val bodies = arrayOf(t("الدوائر المضيئة هي مفاتيح المرحلة.", "The glowing nodes are the stage keys."), t("كل لمسة صحيحة تقرّبك من الصفر.", "Every correct tap pushes you closer to ZERO."), t("المسار السابق يعود كطيف ويتحرك فوق الخريطة.", "Your last route returns as a moving ghost."), t("كل مرحلة تصبح أسرع وأصعب وتغيّر شكل المتاهة.", "Every stage gets faster, harder and less predictable."))
         var y = 176f
         for (i in titles.indices) {
             smallCard(c, 32f, y - 30f, w - 64f, 100f, titles[i], bodies[i])
@@ -167,19 +144,16 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
     }
 
     private fun drawGame(c: Canvas, w: Float, h: Float) {
-        // HUD
         leftText(c, "ZERO", 28f, 38f, 18f, Color.WHITE, true)
         leftText(c, "STAGE ${stage.toString().padStart(2, '0')} / 12", 28f, 64f, 11f, Color.rgb(125,249,255), true)
         rightText(c, t("النتيجة $score", "SCORE $score"), w - 28f, 38f, 15f, Color.WHITE, true)
         rightText(c, "BEST $bestScore", w - 28f, 62f, 10f, Color.rgb(130,142,162), false)
 
-        // Progress line
         paint.color = Color.argb(40, 255,255,255)
         c.drawRoundRect(28f, 83f, w - 28f, 87f, 3f, 3f, paint)
         paint.color = Color.rgb(125,249,255)
         c.drawRoundRect(28f, 83f, 28f + (w - 56f) * (active.toFloat() / nodes.size.coerceAtLeast(1)), 87f, 3f, 3f, paint)
 
-        // Previous route = the ghost
         if (ghostNodes.size > 1) {
             linePaint.color = Color.argb(75, 170, 215, 225)
             linePaint.strokeWidth = 4f
@@ -196,7 +170,6 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
             c.drawCircle(gn.x, gn.y, 7f + 3f * sin(pulse), paint)
         }
 
-        // Current path
         if (active > 1) {
             linePaint.color = Color.argb(150, 125,249,255)
             linePaint.strokeWidth = 5f
@@ -219,20 +192,17 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
             c.drawCircle(n.x, n.y, n.r * .28f, paint)
             centerText(c, "${i + 1}", n.x, n.y + 5f, 12f, Color.rgb(3,8,15), true)
         }
-
         centerText(c, t("اتبع الإشارة...", "FOLLOW THE SIGNAL..."), w / 2f, h - 42f, 12f, Color.rgb(144,155,173), false)
     }
 
     private fun drawResult(c: Canvas, w: Float, h: Float) {
-        centerText(c, if (resultReason == "win") "ZERO" else t("انقطع الصدى", "ECHO LOST"), w / 2f, 164f, 44f, Color.WHITE, true)
-        centerText(c, if (resultReason == "win") t("لقد وصلت إلى الصفر.", "YOU REACHED ZERO.") else t("شبحك كان أسرع منك.", "YOUR ECHO WAS FASTER."), w / 2f, 206f, 17f, Color.rgb(125,249,255), false)
+        centerText(c, "ZERO", w / 2f, 164f, 44f, Color.WHITE, true)
+        centerText(c, t("لقد وصلت إلى الصفر.", "YOU REACHED ZERO."), w / 2f, 206f, 17f, Color.rgb(125,249,255), false)
 
         val panelTop = 274f
         paint.color = Color.argb(95, 10, 18, 32)
-        paint.style = Paint.Style.FILL
         c.drawRoundRect(34f, panelTop, w - 34f, panelTop + 190f, 22f, 22f, paint)
         strokeRound(c, 34f, panelTop, w - 34f, panelTop + 190f, 22f, Color.argb(65,125,249,255), 2f)
-
         centerText(c, "$score", w / 2f, panelTop + 72f, 52f, Color.WHITE, true)
         centerText(c, t("نتيجتك", "YOUR SCORE"), w / 2f, panelTop + 104f, 11f, Color.rgb(135,148,169), false)
         centerText(c, t("السلسلة: $streak", "STREAK: $streak"), w / 2f, panelTop + 140f, 15f, Color.WHITE, false)
@@ -263,11 +233,9 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
         while (newNodes.size < count && tries < 1000) {
             tries++
             val r = (30f - stage * 0.75f).coerceAtLeast(22f)
-            val nx = random.nextFloat() * (width - 70f - 40f) + 55f
+            val nx = random.nextFloat() * (width - 110f) + 55f
             val ny = random.nextFloat() * (bottom - top - 40f) + top + 20f
-            if (newNodes.all { hypot((it.x - nx).toDouble(), (it.y - ny).toDouble()) >= minGap }) {
-                newNodes += Node(nx, ny, r)
-            }
+            if (newNodes.all { hypot((it.x - nx).toDouble(), (it.y - ny).toDouble()) >= minGap }) newNodes += Node(nx, ny, r)
         }
         nodes = newNodes
         active = 0
@@ -280,17 +248,15 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
         val y = e.y
         when (screen) {
             Screen.MENU -> {
-                if (hit(x, y, width/2f, height*.47f, width*.78f, 64f)) { startGame(); buzz(30); return true }
+                if (hit(x, y, width/2f, height*.47f, width*.78f, 64f)) { screen = Screen.STORY; buzz(30); return true }
                 if (hit(x, y, width/2f, height*.47f+82f, width*.78f, 56f)) { screen = Screen.HOWTO; return true }
                 if (hit(x, y, width/2f, height*.47f+154f, width*.78f, 56f)) { arabic = !arabic; prefs.edit().putBoolean("arabic", arabic).apply(); buzz(18); return true }
             }
             Screen.STORY -> {
                 if (hit(x, y, width/2f, height-116f, width*.78f, 62f)) { startGame(); return true }
-                if (hit(x, y, width/2f, height-44f, width*.78f, 48f)) { screen = Screen.MENU; return true }
+                if (hit(x, y, width/2f, height-44f, width*.78f, 48f)) screen = Screen.MENU
             }
-            Screen.HOWTO -> {
-                if (hit(x, y, width/2f, height-50f, width*.78f, 48f)) screen = Screen.MENU
-            }
+            Screen.HOWTO -> if (hit(x, y, width/2f, height-50f, width*.78f, 48f)) screen = Screen.MENU
             Screen.PLAY -> tapGame(x, y)
             Screen.RESULT -> {
                 if (hit(x, y, width/2f, height-124f, width*.78f, 60f)) { startGame(); return true }
@@ -323,11 +289,10 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
     private fun finishStage() {
         ghostNodes = nodes.map { Node(it.x, it.y, it.r) }.toMutableList()
         ghostProgress = 0f
-        score += ((SystemClock.uptimeMillis() - roundStarted).let { if (it < 12000L) 80 else 25 })
+        score += if (SystemClock.uptimeMillis() - roundStarted < 12000L) 80 else 25
         if (stage >= 12) {
             bestScore = maxOf(bestScore, score)
             prefs.edit().putInt("bestScore", bestScore).apply()
-            resultReason = "win"
             screen = Screen.RESULT
             return
         }
@@ -439,9 +404,7 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
         paint.style = Paint.Style.FILL
     }
 
-    private fun hit(x: Float, y: Float, cx: Float, cy: Float, bw: Float, bh: Float): Boolean =
-        x >= cx-bw/2f && x <= cx+bw/2f && y >= cy-bh/2f && y <= cy+bh/2f
-
+    private fun hit(x: Float, y: Float, cx: Float, cy: Float, bw: Float, bh: Float): Boolean = x >= cx-bw/2f && x <= cx+bw/2f && y >= cy-bh/2f && y <= cy+bh/2f
     private fun t(ar: String, en: String): String = if (arabic) ar else en
 
     private fun buzz(ms: Long) {
@@ -450,10 +413,8 @@ private class ZeroView(private val ctx: Context) : View(ctx) {
         } catch (_: Exception) { }
     }
 
-    fun goBack(): Boolean {
-        return when (screen) {
-            Screen.MENU -> false
-            Screen.PLAY, Screen.RESULT, Screen.STORY, Screen.HOWTO -> { screen = Screen.MENU; true }
-        }
+    fun goBack(): Boolean = when (screen) {
+        Screen.MENU -> false
+        Screen.PLAY, Screen.RESULT, Screen.STORY, Screen.HOWTO -> { screen = Screen.MENU; true }
     }
 }
